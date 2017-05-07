@@ -1,0 +1,96 @@
+#!/usr/bin/env node
+'use strict';
+
+const program = require('commander');
+const path = require('path');
+const fs = require('fs');
+
+program
+  .arguments('[dirs...]')
+  .option('-e, --elements <el>', `elements to extract from fit data`, val => val.split(','))
+  .option('-o, --output <outputDir>', `directory where the generated files be written`)
+  .parse(process.argv);
+
+let dirs = program.args;
+let elements = program.elements || [];
+
+let defaultOutputDir = ['results'].concat(elements).join('-');
+let outputDir = program.output || path.join(process.cwd(), defaultOutputDir);
+
+if (dirs.length < 1) {
+  console.error(`
+  💩  You didn't specify a directory to read data from.
+  
+  ❕  fit-summary --elements=Au,La my-data
+  `);
+  process.exit(1);
+}
+
+dirs = dirs
+        .map(dir => path.join(process.cwd(), dir) )
+        .map(dir => dir.replace(/\/$/, ""));
+
+dirs.forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    console.error(`
+      💩  Your specified a data directory that doesn't exist.     
+      
+      ⚠️  ${dir}
+    `);
+    process.exit(1);
+  }
+});
+
+if (elements.length < 1) {
+  console.error(`
+  💩  You didn't specify what elements to extract.
+  
+  ❕  fit-summary --elements=Au,La my-data
+  `);  
+  process.exit(1);
+}
+
+try {
+  elements = elements.map(element => require(`../lib/elements/${element.toLowerCase()}`));
+} catch (e) {
+  console.error(`
+    💩  Error occured while attempt to import an element.  
+    
+    ⚠️  ${e.message}
+  `);
+  process.exit(1);
+}
+
+if (fs.existsSync(outputDir)) {
+  console.error(`
+    💩  Output directory already exists.
+    
+    ❕  You can remove ${outputDir}
+    ❕  You can use use --output= option to specify output directory.
+  `);  
+  process.exit(1);
+}
+
+require('../lib/index').build({
+  elements,
+  dirs,
+  outputDir
+}).then(() => {
+    console.info(`
+      😊  Build was successful!
+
+      😍  Files written to ${outputDir}
+    `);
+  })
+  .then(function () {
+    process.exit(0)
+  })
+  .catch(function (err) {
+    // Should show file and line/col if present
+    if (err.file) {
+      console.error('File: ' + err.file)
+    }
+    console.error(err.stack)
+    console.error('\nBuild failed')
+    process.exit(1)
+  });
