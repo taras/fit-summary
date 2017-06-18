@@ -4,18 +4,22 @@
 const program = require('commander');
 const path = require('path');
 const fs = require('fs');
+const builder = require('../lib/index');
 
 program
   .arguments('[dirs...]')
   .option('-e, --elements <el>', `elements to extract from fit data`, val => val.split(','))
   .option('-o, --output <outputDir>', `directory where the generated files be written`)
+  .option('-n, --extension <extNumber>', `number of file extension where fit is found`)
   .parse(process.argv);
 
 let dirs = program.args;
 let elements = program.elements || [];
+let extNumber = program['extension'] || 3;
 
 let defaultOutputDir = ['results'].concat(elements).join('-');
 let outputDir = program.output || path.join(process.cwd(), defaultOutputDir);
+let extension = `${extNumber}.fit`;
 
 if (dirs.length < 1) {
   console.error(`
@@ -71,15 +75,22 @@ if (fs.existsSync(outputDir)) {
   process.exit(1);
 }
 
-require('../lib/index').build({
+console.info(`
+      👷  Building fit summary:
+          - files: ${dirs.map(dir => `${dir}/*.${extension}`).join("\n    ")}
+          - elements: ${elements.map(el => el.name).join(', ')}
+`);
+
+builder.build({
   elements,
   dirs,
-  outputDir
+  outputDir,
+  extension
 }).then(() => {
     console.info(`
       😊  Build was successful!
 
-      😍  Files written to ${outputDir}
+      😘  Files written to ${outputDir}
     `);
   })
   .then(function () {
@@ -88,9 +99,19 @@ require('../lib/index').build({
   .catch(function (err) {
     // Should show file and line/col if present
     if (err.file) {
-      console.error('File: ' + err.file)
+      console.error('File: ' + err.file);
     }
-    console.error(err.stack)
-    console.error('\nBuild failed')
+    console.error(`
+      ❌  Build failed
+    `);
+    if (err.message.indexOf('Concat: nothing matched [**/*.txt]') !== -1) {
+      console.error(`
+      😫  Could not find files matching: ${dirs.map(dir => `${dir}/*.${extension}`).join("\n    ")}
+          
+      ❕  Try using --extension=2
+      `);
+    } else {
+      console.error(err.stack);
+    }
     process.exit(1)
   });
